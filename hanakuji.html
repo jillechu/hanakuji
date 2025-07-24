@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+<link href="https://fonts.googleapis.com/css2?family=Sawarabi+Gothic&display=swap" rel="stylesheet">  <title>花くじ</title>
+  <style>
+    body {
+ 　　 font-family: 'Sawarabi Gothic', 'Yu Gothic', sans-serif;
+      background: #fff0f5;
+      text-align: center;
+      padding: 40px;
+    }
+
+    h1 {
+      color: #c71585;
+    }
+
+    input {
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      margin-bottom: 10px;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 6px;
+      background-color: #ff69b4;
+      color: white;
+      cursor: pointer;
+      margin: 5px;
+    }
+
+    #result {
+      font-size: 24px;
+      margin: 20px;
+      font-weight: bold;
+    }
+
+    #history {
+      margin-top: 40px;
+      text-align: left;
+      max-width: 500px;
+      margin-left: auto;
+      margin-right: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+
+    .history-item {
+      border-bottom: 1px solid #eee;
+      padding: 6px 0;
+      color: #444;
+    }
+
+    .name-label {
+      font-weight: bold;
+      color: #555;
+    }
+
+    .date-label {
+      font-size: 12px;
+      color: #999;
+      margin-left: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>花くじ</h1>
+
+  <input type="text" id="userName" placeholder="名前を入力" />
+  <button onclick="showMessage()">引く</button>
+
+  <div id="result">【結果】</div>
+
+  <div id="history">
+    <h2>履歴</h2>
+    <div id="historyList"></div>
+  </div>
+
+  <script>
+    const messages = [
+      { id: 1, text: "赤い花" },
+      { id: 2, text: "赤い花" },
+      { id: 3, text: "白い花" },
+      { id: 4, text: "白い花" },
+      { id: 5, text: "白い花" },
+      { id: 6, text: "白い花" },
+      { id: 7, text: "白い花" },
+      { id: 8, text: "白い花" },
+      { id: 9, text: "白い花" }
+    ];
+
+    const messageColors = {
+      "赤い花": "#e53935",
+      "白い花": "#444"
+    };
+
+    const HISTORY_KEY = "messageHistory";
+    const USED_KEY = "usedMessages";
+
+    function showMessage() {
+      const name = document.getElementById("userName").value.trim();
+      if (!name) {
+        alert("名前を入力してね！");
+        return;
+      }
+
+      const used = JSON.parse(localStorage.getItem(USED_KEY) || "[]");
+      const available = messages.filter(m => !used.includes(m.id));
+
+      if (available.length === 0) {
+        document.getElementById("result").textContent = "すべての結果が出ました！リセットされるまでお待ちください。";
+        return;
+      }
+
+      const message = available[Math.floor(Math.random() * available.length)];
+      const timestamp = new Date().toISOString();
+      const resultText = `${name}さんの結果：${message.text}`;
+
+      const resultEl = document.getElementById("result");
+      resultEl.textContent = resultText;
+      resultEl.style.color = messageColors[message.text] || "#000";
+
+      addHistoryItem({ name, message: message.text, timestamp }, true);
+
+sendResultToSheet(name, message.text);
+
+      // 使用済みに追加
+      used.push(message.id);
+      localStorage.setItem(USED_KEY, JSON.stringify(used));
+    }
+
+    function addHistoryItem(entry, save) {
+      const historyList = document.getElementById("historyList");
+      const newItem = document.createElement("div");
+      newItem.className = "history-item";
+
+      const dateTimeStr = new Date(entry.timestamp).toLocaleString("ja-JP");
+
+      newItem.innerHTML = `<span class="name-label">${entry.name}さん</span>：
+        <span style="color:${messageColors[entry.message] || '#000'}">${entry.message}</span>
+        <span class="date-label">（${dateTimeStr}）</span>`;
+
+      historyList.prepend(newItem);
+
+      if (save) {
+        let historyArray = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+        historyArray.unshift(entry);
+        if (historyArray.length > 200) historyArray = historyArray.slice(0, 200);
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(historyArray));
+      }
+    }
+
+    function loadHistory() {
+      const stored = localStorage.getItem(HISTORY_KEY);
+      const usedStored = localStorage.getItem(USED_KEY);
+      if (stored) {
+        const historyArray = JSON.parse(stored);
+        for (const entry of historyArray) {
+          addHistoryItem(entry, false);
+        }
+      }
+
+      // 結果が全部使われていたら表示をブロック
+      const used = JSON.parse(usedStored || "[]");
+      if (used.length >= messages.length) {
+        document.getElementById("result").textContent = "すべての結果が出ました！管理者がリセットするまで引けません。";
+      }
+    }
+
+    // 初期読み込み
+    loadHistory();
+
+
+const GAS_URL = "https://script.google.com/macros/s/AKfycbzT2KQGToAs9q2NFptp9WXcnTz_PDHlXFViGwZS7er4bLHTiqNkx3jAQqeTWO-1sql0/exec";
+
+function sendResultToSheet(name, result) {
+  fetch(GAS_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ name: name, result: result })
+  })
+  .then(response => console.log("? スプレッドシートへ送信成功"))
+  .catch(error => console.error("? 送信失敗:", error));
+}
+
+
+  </script>
+</body>
+</html>
